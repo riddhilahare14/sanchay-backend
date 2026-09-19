@@ -5,9 +5,14 @@ import java.math.RoundingMode;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.sanchay.exception.BadRequestException;
 import com.sanchay.exception.ResourceNotFoundException;
+import com.sanchay.member.Member;
+import com.sanchay.member.MemberRepository;
+import com.sanchay.state.AppState;
+import com.sanchay.state.AppStateRepository;
 import com.sanchay.state.AppStateService;
 
 @Service
@@ -15,14 +20,20 @@ public class LoanService {
 
     private final LoanRepository loanRepository;
     private final AppStateService appStateService;
+	private final MemberRepository memberRepository;
+	private final AppStateRepository appStateRepository;
 
-    public LoanService(
-            LoanRepository loanRepository,
-            AppStateService appStateService
-    ) {
-        this.loanRepository = loanRepository;
-        this.appStateService = appStateService;
-    }
+	public LoanService(
+        LoanRepository loanRepository,
+        AppStateService appStateService,
+        MemberRepository memberRepository,
+		AppStateRepository appStateRepository
+	) {
+		this.loanRepository = loanRepository;
+		this.appStateService = appStateService;
+		this.memberRepository = memberRepository;
+		this.appStateRepository = appStateRepository;
+	}
 
 	public List<ActiveLoanResponse> getActiveLoans() {
 
@@ -112,5 +123,73 @@ public class LoanService {
 				principalRepayment,
 				totalReceived
 		);
+	}
+
+	@Transactional
+	public Loan createLoan(LoanCreateRequest request) {
+
+		// 1. Find the member
+		Member member = memberRepository.findById(request.memberId())
+				.orElseThrow(() ->
+						new ResourceNotFoundException("Member not found")
+				);
+
+		// 2. Get current app state
+		AppState appState = appStateService.getAppState();
+
+		BigDecimal loanAmount = request.principalAmount();
+
+		// 3. Check bank balance
+		if (loanAmount.compareTo(appState.getBankBalance()) > 0) {
+			throw new BadRequestException(
+					"Loan amount cannot be greater than current bank balance"
+			);
+		}
+
+		// 4. Check whether member already has an active loan
+		var existingLoan =
+				loanRepository.findByMemberIdAndStatus(
+						member.getId(),
+						LoanStatus.ACTIVE
+				);
+
+		Loan loan;
+
+		if (existingLoan.isPresent()) {
+
+			// Existing active loan → add amount to it
+			loan = existingLoan.get();
+
+			loan.setRemainingPrincipal(
+					loan.getRemainingPrincipal()
+							.add(loanAmount)
+			);
+
+		} else {
+
+			// No active loan → create a new one
+			loan = new Loan();
+
+			loan.setMember(member);
+			loan.setRemainingPrincipal(loanAmount);
+			loan.setStatus(LoanStatus.ACTIVE);
+
+			loan.setMonthlyPrincipalRepayment(BigDecimal.ZERO);
+			loan.setMonthlyInterest(BigDecimal.ZERO);
+			loan.setMonthlyTotalReceived(BigDecimal.ZERO);
+			loan.setMonthlyPaid(false);
+		}
+
+		// 5. Subtract newly given loan amount from bank balance
+		appState.setBankBalance(
+				appState.getBankBalance()
+						.subtract(loanAmount)
+		);
+
+		// 6. Save both
+		loanRepository.save(loan);
+		appStateRepository.save(appState);
+
+		return loan;
 	}
 }
