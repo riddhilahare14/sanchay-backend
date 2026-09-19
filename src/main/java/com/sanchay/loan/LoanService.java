@@ -74,6 +74,12 @@ public class LoanService {
 
 		BigDecimal principalRepayment = request.principalRepayment();
 
+		if (principalRepayment.compareTo(BigDecimal.ZERO) <= 0) {
+			throw new BadRequestException(
+					"Principal repayment must be greater than zero"
+			);
+		}
+
 		if (principalRepayment.compareTo(
 				loan.getRemainingPrincipal()) > 0) {
 			throw new BadRequestException(

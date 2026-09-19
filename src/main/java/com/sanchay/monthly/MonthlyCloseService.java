@@ -70,8 +70,8 @@ public class MonthlyCloseService {
 
     public MonthlyPreviewResponse previewMonthlyClose() {
 
-        validateMembers();
-        validateLoans();
+        // validateMembers();
+        // validateLoans();
 
         AppState appState = appStateService.getAppState();
 
@@ -165,22 +165,21 @@ public class MonthlyCloseService {
                 .stream()
                 .forEach(loan -> {
 
-                    BigDecimal newRemainingPrincipal =
-                            loan.getRemainingPrincipal()
-                                    .subtract(
-                                            loan.getMonthlyPrincipalRepayment()
-                                    );
-
-                    loan.setRemainingPrincipal(
-                            newRemainingPrincipal
-                    );
-
-                    if (newRemainingPrincipal.compareTo(
-                            BigDecimal.ZERO
-                    ) == 0) {
-
-                        loan.setStatus(LoanStatus.NIL);
-                    }
+                        BigDecimal newRemainingPrincipal =
+								loan.getRemainingPrincipal()
+										.subtract(
+												loan.getMonthlyPrincipalRepayment()
+										);
+						
+						if (newRemainingPrincipal.compareTo(BigDecimal.ZERO) <= 0) {
+						
+							loan.setRemainingPrincipal(BigDecimal.ZERO);
+							loan.setStatus(LoanStatus.NIL);
+						
+						} else {
+						
+							loan.setRemainingPrincipal(newRemainingPrincipal);
+						}
 
                     // Reset current month's loan state
                     loan.setMonthlyPrincipalRepayment(
