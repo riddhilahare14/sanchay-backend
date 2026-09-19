@@ -72,7 +72,7 @@ public class LoanService {
 	}
 
 	public MonthlyLoanDetailResponse recordLoanPayment(
-        LoanRepaymentRequest request
+			LoanRepaymentRequest request
 	) {
 		Loan loan = loanRepository.findById(request.loanId())
 				.orElseThrow(() ->
@@ -101,26 +101,20 @@ public class LoanService {
 		BigDecimal interestRate =
 				appStateService.getAppState().getLoanInterestRate();
 
-		BigDecimal monthlyInterest = loan.getRemainingPrincipal()
-				.multiply(interestRate)
-				.setScale(0, RoundingMode.CEILING);
-
-				BigDecimal totalReceived =
-				principalRepayment.add(monthlyInterest);
-		
-		BigDecimal remainingPrincipal =
+		BigDecimal monthlyInterest =
 				loan.getRemainingPrincipal()
-						.subtract(principalRepayment);
-		
-		loan.setRemainingPrincipal(remainingPrincipal);
+						.multiply(interestRate)
+						.setScale(0, RoundingMode.CEILING);
+
+		BigDecimal totalReceived =
+				principalRepayment.add(monthlyInterest);
+
+		// Only record this month's payment.
+		// Do NOT change remainingPrincipal or status here.
 		loan.setMonthlyPrincipalRepayment(principalRepayment);
 		loan.setMonthlyInterest(monthlyInterest);
 		loan.setMonthlyTotalReceived(totalReceived);
 		loan.setMonthlyPaid(true);
-		
-		if (remainingPrincipal.compareTo(BigDecimal.ZERO) == 0) {
-			loan.setStatus(LoanStatus.NIL);
-		}
 
 		loanRepository.save(loan);
 

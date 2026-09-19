@@ -53,15 +53,14 @@ public class MonthlyCloseService {
 
     private void validateLoans() {
 
-        long activeLoans = loanRepository.findByStatus(LoanStatus.ACTIVE)
-                .size();
-
-        long paidLoans = loanRepository.findByStatus(LoanStatus.ACTIVE)
-                .stream()
+        var activeLoans =
+                loanRepository.findByStatus(LoanStatus.ACTIVE);
+    
+        long paidLoans = activeLoans.stream()
                 .filter(Loan::isMonthlyPaid)
                 .count();
-
-        if (paidLoans != activeLoans) {
+    
+        if (paidLoans != activeLoans.size()) {
             throw new BadRequestException(
                     "All active loans must be paid before closing the month"
             );
@@ -69,9 +68,6 @@ public class MonthlyCloseService {
     }
 
     public MonthlyPreviewResponse previewMonthlyClose() {
-
-        // validateMembers();
-        // validateLoans();
 
         AppState appState = appStateService.getAppState();
 
@@ -161,43 +157,42 @@ public class MonthlyCloseService {
         /*
          * Apply loan principal repayments
          */
-        loanRepository.findByStatus(LoanStatus.ACTIVE)
-                .stream()
-                .forEach(loan -> {
+		loanRepository.findByStatus(LoanStatus.ACTIVE)
+			.forEach(loan -> {
 
-                        BigDecimal newRemainingPrincipal =
-								loan.getRemainingPrincipal()
-										.subtract(
-												loan.getMonthlyPrincipalRepayment()
-										);
-						
-						if (newRemainingPrincipal.compareTo(BigDecimal.ZERO) <= 0) {
-						
-							loan.setRemainingPrincipal(BigDecimal.ZERO);
-							loan.setStatus(LoanStatus.NIL);
-						
-						} else {
-						
-							loan.setRemainingPrincipal(newRemainingPrincipal);
-						}
+				BigDecimal newRemainingPrincipal =
+						loan.getRemainingPrincipal()
+								.subtract(
+										loan.getMonthlyPrincipalRepayment()
+								);
 
-                    // Reset current month's loan state
-                    loan.setMonthlyPrincipalRepayment(
-                            BigDecimal.ZERO
-                    );
+				if (newRemainingPrincipal.compareTo(BigDecimal.ZERO) <= 0) {
 
-                    loan.setMonthlyInterest(
-                            BigDecimal.ZERO
-                    );
+					loan.setRemainingPrincipal(BigDecimal.ZERO);
+					loan.setStatus(LoanStatus.NIL);
 
-                    loan.setMonthlyTotalReceived(
-                            BigDecimal.ZERO
-                    );
+				} else {
 
-                    loan.setMonthlyPaid(false);
+					loan.setRemainingPrincipal(newRemainingPrincipal);
+				}
 
-                    loanRepository.save(loan);
-                });
+				// Reset current month's loan state
+				loan.setMonthlyPrincipalRepayment(
+						BigDecimal.ZERO
+				);
+
+				loan.setMonthlyInterest(
+						BigDecimal.ZERO
+				);
+
+				loan.setMonthlyTotalReceived(
+						BigDecimal.ZERO
+				);
+
+				loan.setMonthlyPaid(false);
+
+				loanRepository.save(loan);
+			});
 
         /*
          * Reset member monthly payments
