@@ -9,8 +9,5 @@ public interface LoanRepository extends JpaRepository<Loan, Long> {
 
     List<Loan> findByStatus(LoanStatus status);
 
-    Optional<Loan> findByMemberIdAndStatus(
-            Long memberId,
-            LoanStatus status
-    );
+    Optional<Loan> findByMemberId(Long memberId);
 }

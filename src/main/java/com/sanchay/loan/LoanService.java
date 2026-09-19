@@ -105,13 +105,22 @@ public class LoanService {
 				.multiply(interestRate)
 				.setScale(0, RoundingMode.CEILING);
 
-		BigDecimal totalReceived =
+				BigDecimal totalReceived =
 				principalRepayment.add(monthlyInterest);
-
+		
+		BigDecimal remainingPrincipal =
+				loan.getRemainingPrincipal()
+						.subtract(principalRepayment);
+		
+		loan.setRemainingPrincipal(remainingPrincipal);
 		loan.setMonthlyPrincipalRepayment(principalRepayment);
 		loan.setMonthlyInterest(monthlyInterest);
 		loan.setMonthlyTotalReceived(totalReceived);
 		loan.setMonthlyPaid(true);
+		
+		if (remainingPrincipal.compareTo(BigDecimal.ZERO) == 0) {
+			loan.setStatus(LoanStatus.NIL);
+		}
 
 		loanRepository.save(loan);
 
@@ -146,38 +155,45 @@ public class LoanService {
 			);
 		}
 
-		// 4. Check whether member already has an active loan
+		// 4. Check whether this member already has a loan record
 		var existingLoan =
-				loanRepository.findByMemberIdAndStatus(
-						member.getId(),
-						LoanStatus.ACTIVE
-				);
+		loanRepository.findByMemberId(member.getId());
 
 		Loan loan;
 
 		if (existingLoan.isPresent()) {
 
-			// Existing active loan → add amount to it
-			loan = existingLoan.get();
+		// Existing loan record found
+		loan = existingLoan.get();
 
-			loan.setRemainingPrincipal(
-					loan.getRemainingPrincipal()
-							.add(loanAmount)
-			);
+		// Add the new loan amount to the existing remaining principal
+		loan.setRemainingPrincipal(
+			loan.getRemainingPrincipal()
+					.add(loanAmount)
+		);
+
+		// Make sure the loan becomes active again
+		loan.setStatus(LoanStatus.ACTIVE);
+
+		// Reset this month's payment details
+		loan.setMonthlyPrincipalRepayment(BigDecimal.ZERO);
+		loan.setMonthlyInterest(BigDecimal.ZERO);
+		loan.setMonthlyTotalReceived(BigDecimal.ZERO);
+		loan.setMonthlyPaid(false);
 
 		} else {
 
-			// No active loan → create a new one
-			loan = new Loan();
+		// No loan record exists for this member
+		loan = new Loan();
 
-			loan.setMember(member);
-			loan.setRemainingPrincipal(loanAmount);
-			loan.setStatus(LoanStatus.ACTIVE);
+		loan.setMember(member);
+		loan.setRemainingPrincipal(loanAmount);
+		loan.setStatus(LoanStatus.ACTIVE);
 
-			loan.setMonthlyPrincipalRepayment(BigDecimal.ZERO);
-			loan.setMonthlyInterest(BigDecimal.ZERO);
-			loan.setMonthlyTotalReceived(BigDecimal.ZERO);
-			loan.setMonthlyPaid(false);
+		loan.setMonthlyPrincipalRepayment(BigDecimal.ZERO);
+		loan.setMonthlyInterest(BigDecimal.ZERO);
+		loan.setMonthlyTotalReceived(BigDecimal.ZERO);
+		loan.setMonthlyPaid(false);
 		}
 
 		// 5. Subtract newly given loan amount from bank balance
